@@ -8,6 +8,12 @@ interface MissingUser {
   file: string;
 }
 
+interface UserGroup {
+  user: string;
+  files: string[];
+  count: number;
+}
+
 interface ComparisonResults {
   totalJsonFiles: number;
   matchingCount: number;
@@ -181,12 +187,34 @@ export default function UserComparison() {
     }
   };
 
+  const groupByUser = (users: MissingUser[]): UserGroup[] => {
+    const grouped: Record<string, string[]> = {};
+
+    users.forEach(item => {
+      if (!grouped[item.currentUser]) {
+        grouped[item.currentUser] = [];
+      }
+      grouped[item.currentUser].push(item.file);
+    });
+
+    return Object.entries(grouped).map(([user, files]) => ({
+      user,
+      files,
+      count: files.length
+    }));
+  };
+
   const handleDownloadMissing = () => {
     if (!results || results.missingUsers.length === 0) return;
 
-    const csv = Papa.unparse(results.missingUsers, {
-      columns: ['currentUser', 'file']
-    });
+    const groupedData = groupByUser(results.missingUsers);
+    const csvData = groupedData.map(group => ({
+      'User Email': group.user,
+      'File Count': group.count,
+      'Files': group.files.join('; ')
+    }));
+
+    const csv = Papa.unparse(csvData);
 
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -341,57 +369,71 @@ export default function UserComparison() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-slate-50 rounded-lg p-4">
-                <p className="text-sm text-slate-600 mb-1">Total JSON Files</p>
-                <p className="text-2xl font-bold text-slate-800">{results.totalJsonFiles}</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <div className="bg-white rounded-lg p-6 border-l-4 border-blue-500 shadow-sm">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Total JSON Files</p>
+                <p className="text-4xl font-bold text-slate-800">{results.totalJsonFiles}</p>
               </div>
-              <div className="bg-green-50 rounded-lg p-4">
-                <p className="text-sm text-green-600 mb-1">Matching Users</p>
-                <p className="text-2xl font-bold text-green-700">{results.matchingCount}</p>
+              <div className="bg-white rounded-lg p-6 border-l-4 border-green-500 shadow-sm">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Matching Users</p>
+                <div className="flex items-baseline gap-3">
+                  <p className="text-4xl font-bold text-green-700">{results.matchingCount}</p>
+                  <CheckCircle className="w-6 h-6 text-green-500" />
+                </div>
               </div>
-              <div className="bg-red-50 rounded-lg p-4">
-                <p className="text-sm text-red-600 mb-1">Missing Users</p>
-                <p className="text-2xl font-bold text-red-700">{results.missingUsers.length}</p>
+              <div className="bg-white rounded-lg p-6 border-l-4 border-red-500 shadow-sm">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Missing Users</p>
+                <div className="flex items-baseline gap-3">
+                  <p className="text-4xl font-bold text-red-700">{results.missingUsers.length}</p>
+                  <AlertCircle className="w-6 h-6 text-red-500" />
+                </div>
               </div>
             </div>
 
             {results.missingUsers.length > 0 && (
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-semibold text-slate-700">Missing Users Details</h4>
+                <div className="flex items-center justify-between mb-6">
+                  <h4 className="text-lg font-semibold text-slate-800">Missing Users Details</h4>
                   <button
                     onClick={handleDownloadMissing}
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium
-                             hover:bg-green-700 transition-colors duration-200 flex items-center gap-2 text-sm"
+                    className="bg-blue-600 text-white px-4 py-2.5 rounded-lg font-medium
+                             hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2 text-sm shadow-sm"
                   >
                     <Download className="w-4 h-4" />
-                    Download CSV
+                    Export CSV
                   </button>
                 </div>
 
-                <div className="bg-slate-50 rounded-lg overflow-hidden border border-slate-200">
-                  <div className="max-h-96 overflow-y-auto">
-                    <table className="w-full">
-                      <thead className="sticky top-0 bg-slate-100">
-                        <tr className="border-b border-slate-300">
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Current User</th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">File</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {results.missingUsers.map((user, index) => (
-                          <tr
-                            key={index}
-                            className="border-b border-slate-200 bg-white hover:bg-slate-50 transition-colors"
-                          >
-                            <td className="py-3 px-4 text-sm text-slate-700">{user.currentUser}</td>
-                            <td className="py-3 px-4 text-sm text-slate-600 truncate">{user.file}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className="space-y-4">
+                  {groupByUser(results.missingUsers).map((userGroup, index) => (
+                    <div key={index} className="bg-white rounded-lg border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between bg-slate-50 px-5 py-4 border-b border-slate-200">
+                        <div className="flex items-center gap-3">
+                          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-slate-600 uppercase tracking-wide">User Email</p>
+                            <p className="text-base font-medium text-slate-800 mt-0.5">{userGroup.user}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-slate-600 uppercase tracking-wide">File Count</p>
+                          <p className="text-2xl font-bold text-slate-800 mt-0.5">{userGroup.count}</p>
+                        </div>
+                      </div>
+
+                      <div className="px-5 py-4">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Files</p>
+                        <div className="space-y-2">
+                          {userGroup.files.map((file, fileIndex) => (
+                            <div key={fileIndex} className="flex items-start gap-2 text-sm text-slate-700 bg-slate-50 p-3 rounded border border-slate-100">
+                              <span className="text-slate-400 flex-shrink-0 mt-0.5">•</span>
+                              <span className="break-all">{file}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
